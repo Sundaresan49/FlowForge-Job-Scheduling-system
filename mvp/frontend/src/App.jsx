@@ -1,236 +1,53 @@
-import { useEffect, useMemo, useState } from "react";
-import { api } from "./api";
+import { useEffect, useState } from "react";
+import { activity, initialTasks, projects, teams } from "./data";
 
-const emptyProject = { name: "", description: "", status: "ONGOING" };
-const emptyTask = {
-  title: "",
-  description: "",
-  prioriti: "MEDIUM",
-  datetime: "",
-  iscompleted: false,
-};
+function Mark() { return <span className="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>; }
+function Avatar({ initials, color = "#4285F4" }) { return <span className="avatar" style={{ background: color }}>{initials}</span>; }
+function Pill({ children, tone = "blue" }) { return <span className={`pill ${tone}`}>{children}</span>; }
 
-const priorityStyles = {
-  HIGH: "bg-rose-100 text-rose-700",
-  MEDIUM: "bg-amber-100 text-amber-700",
-  LOW: "bg-emerald-100 text-emerald-700",
-};
-
-function ProjectForm({ onSubmit, disabled }) {
-  const [project, setProject] = useState(emptyProject);
-
-  async function submit(event) {
-    event.preventDefault();
-    await onSubmit(project);
-    setProject(emptyProject);
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-3 border-t border-slate-200 pt-4">
-      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">New project</p>
-      <input className="field" placeholder="Project name" required value={project.name} disabled={disabled}
-        onChange={(event) => setProject({ ...project, name: event.target.value })} />
-      <textarea className="field min-h-20 resize-y" placeholder="Short description" value={project.description} disabled={disabled}
-        onChange={(event) => setProject({ ...project, description: event.target.value })} />
-      <select className="field" value={project.status} disabled={disabled}
-        onChange={(event) => setProject({ ...project, status: event.target.value })}>
-        <option value="ONGOING">Ongoing</option>
-        <option value="ONHOLD">On hold</option>
-        <option value="BLOCKED">Blocked</option>
-        <option value="INREVIEW">In review</option>
-        <option value="COMPLETED">Completed</option>
-      </select>
-      <button className="btn-primary w-full" disabled={disabled}>Create project</button>
-    </form>
-  );
+function useRoute() {
+  const [path, setPath] = useState(window.location.pathname);
+  useEffect(() => { const fn = () => setPath(window.location.pathname); window.addEventListener("popstate", fn); return () => window.removeEventListener("popstate", fn); }, []);
+  const go = (to) => { history.pushState({}, "", to); setPath(to); scrollTo({ top: 0, behavior: "smooth" }); };
+  return [path, go];
 }
+function Link({ to, go, children, className = "" }) { return <a href={to} className={className} onClick={(e) => { e.preventDefault(); go(to); }}>{children}</a>; }
 
-function TaskForm({ onSubmit, disabled }) {
-  const [task, setTask] = useState(emptyTask);
-
-  async function submit(event) {
-    event.preventDefault();
-    await onSubmit(task);
-    setTask(emptyTask);
-  }
-
-  return (
-    <form onSubmit={submit} className="grid gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 sm:grid-cols-2">
-      <input className="field" placeholder="Task title" required value={task.title} disabled={disabled}
-        onChange={(event) => setTask({ ...task, title: event.target.value })} />
-      <select className="field" value={task.prioriti} disabled={disabled}
-        onChange={(event) => setTask({ ...task, prioriti: event.target.value })}>
-        <option value="HIGH">High priority</option>
-        <option value="MEDIUM">Medium priority</option>
-        <option value="LOW">Low priority</option>
-      </select>
-      <textarea className="field min-h-20 sm:col-span-2" placeholder="Task description" value={task.description} disabled={disabled}
-        onChange={(event) => setTask({ ...task, description: event.target.value })} />
-      <input className="field" type="datetime-local" value={task.datetime} disabled={disabled}
-        onChange={(event) => setTask({ ...task, datetime: event.target.value })} />
-      <button className="btn-primary" disabled={disabled}>Add task</button>
-    </form>
-  );
+function Header({ path, go }) {
+  return <header className="header"><div className="shell header-inner"><Link to="/" go={go} className="brand"><Mark />FlowForge</Link><nav><Link to="/features" go={go} className={path === "/features" ? "chosen" : ""}>Product</Link><Link to="/templates" go={go} className={path === "/templates" ? "chosen" : ""}>Templates</Link><Link to="/about" go={go} className={path === "/about" ? "chosen" : ""}>About</Link></nav><Link to="/workspace" go={go} className="button blue">Open workspace <b>→</b></Link></div></header>;
 }
+function Footer({ go }) { return <footer className="footer"><div className="shell footer-grid"><div><Link to="/" go={go} className="brand"><Mark />FlowForge</Link><p>Practical project management for teams who care about the work.</p></div><div><b>Explore</b><Link to="/features" go={go}>Product</Link><Link to="/templates" go={go}>Templates</Link><Link to="/about" go={go}>About</Link></div><div><b>Workspace</b><Link to="/workspace" go={go}>Overview</Link><Link to="/projects" go={go}>Projects</Link><Link to="/teams" go={go}>Teams</Link></div></div><div className="shell footer-bottom">© 2026 FlowForge <span>Demo experience · No account required</span></div></footer>; }
 
-function TaskCard({ task, onToggle, disabled }) {
-  const done = task.iscompleted;
-  return (
-    <article className={`rounded-xl border p-4 shadow-sm transition ${done ? "border-emerald-100 bg-emerald-50/50" : "border-slate-200 bg-white"}`}>
-      <div className="flex items-start gap-3">
-        <input aria-label={`Mark ${task.title} complete`} type="checkbox" checked={done} disabled={disabled}
-          onChange={() => onToggle(task.id)} className="mt-1 h-4 w-4 accent-indigo-600" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <h3 className={`font-semibold ${done ? "text-slate-400 line-through" : "text-slate-800"}`}>{task.title}</h3>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${priorityStyles[task.prioriti] || "bg-slate-100 text-slate-600"}`}>{task.prioriti || "UNSET"}</span>
-          </div>
-          {task.description && <p className={`mt-2 text-sm ${done ? "text-slate-400" : "text-slate-600"}`}>{task.description}</p>}
-          {task.datetime && <p className="mt-3 text-xs font-medium text-slate-400">Due {new Date(task.datetime).toLocaleString()}</p>}
-        </div>
-      </div>
-    </article>
-  );
-}
+function Home({ go }) { return <>
+  <section className="hero"><div className="shell hero-grid"><div><span className="eyebrow"><i></i> A better rhythm for team work</span><h1>Make the next<br /><em>good move.</em></h1><p>FlowForge gives thoughtful teams one calm, shared place to plan projects, unblock work, and keep the important things moving.</p><div className="actions"><Link to="/workspace" go={go} className="button blue">Explore the workspace <b>→</b></Link><Link to="/features" go={go} className="text-link">See how it works →</Link></div><div className="proof"><span className="avatar-stack"><Avatar initials="MS" /><Avatar initials="RP" color="#34A853" /><Avatar initials="AS" color="#EA4335" /></span>Designed around the way real teams work.</div></div><HeroProduct /></div></section>
+  <section className="trust"><div className="shell"><span>Built for the teams behind the work</span><b>ORBIT</b><b>canvas°</b><b>fieldnotes</b><b>north star</b></div></section>
+  <section className="shell section"><div className="section-intro"><span className="eyebrow">A complete team workspace</span><h2>Less chasing. More making.</h2><p>From the project big picture to the next five minutes of focused work, FlowForge gives every task the context it needs.</p></div><div className="feature-grid">{[["◫", "Projects with shape", "Give every initiative an owner, a rhythm, and a clear point of view.", "blue"], ["✓", "Tasks that move", "See what is stuck, what is next, and what has already made progress.", "green"], ["◉", "Teams in the loop", "Keep useful context close to the people who need it—without the noise.", "red"], ["↗", "Progress you can trust", "A quick read on momentum, priorities, and what needs attention.", "yellow"]].map(([icon, title, text, color]) => <article key={title} className="feature"><span className={`feature-icon ${color}`}>{icon}</span><h3>{title}</h3><p>{text}</p><b>→</b></article>)}</div></section>
+  <section className="statement"><div className="shell statement-inner"><div><span className="eyebrow">Built for momentum</span><h2>One workspace.<br />A clearer week.</h2></div><p>FlowForge is not another place to put work. It is a practical operating system for teams who want less admin, fewer status chases, and more space to do their best work.</p><Link to="/templates" go={go} className="button dark">Browse templates →</Link></div></section>
+  <section className="shell section"><div className="section-title-row"><div><span className="eyebrow">Start with a real workflow</span><h2>Made for the work you already do.</h2></div><Link to="/templates" go={go} className="text-link">View all templates →</Link></div><div className="template-row"><MiniTemplate title="Product launch" color="#4285F4" tags="Roadmap · QA · Release" /><MiniTemplate title="Creative campaign" color="#EA4335" tags="Brief · Production · Launch" /><MiniTemplate title="Team onboarding" color="#34A853" tags="Week one · People · Feedback" /></div></section>
+  </>; }
+function HeroProduct() { return <div className="hero-product"><div className="product-top"><span>● ● ●</span><b>Atlas mobile launch</b><i>•••</i></div><div className="product-content"><aside><Mark /><i className="selected"></i><i></i><i></i></aside><main><div className="product-heading"><div><small>PROJECT OVERVIEW</small><h3>Today, in focus</h3></div><Pill tone="green">On track</Pill></div><div className="task-preview blue-line"><div><small>HIGH PRIORITY</small><b>Map the mobile planning flow</b></div><Avatar initials="MS" /></div><div className="task-preview yellow-line"><div><small>UP NEXT</small><b>Review empty-state copy</b></div><Avatar initials="NK" color="#FBBC04" /></div><div className="chart-preview"><span>Project momentum <b>72%</b></span><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></main></div><strong className="float-note">3 priorities cleared this week ↗</strong></div>; }
+function MiniTemplate({ title, color, tags }) { return <article className="mini-template"><div style={{ background: color }}><i></i><i></i><i></i></div><h3>{title}</h3><p>{tags}</p></article>; }
 
-export default function App() {
-  const [users, setUsers] = useState([]);
-  const [activeUserId, setActiveUserId] = useState("");
-  const [projects, setProjects] = useState([]);
-  const [activeProjectId, setActiveProjectId] = useState("");
-  const [tasks, setTasks] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [priorityFilter, setPriorityFilter] = useState("ALL");
-  const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState("");
+function AppShell({ path, go, children }) { const nav = [["Overview", "/workspace", "▦"], ["Projects", "/projects", "▱"], ["My tasks", "/tasks", "✓"], ["Calendar", "/calendar", "□"], ["Teams", "/teams", "◉"]]; return <div className="app-shell"><aside className="side"><Link to="/" go={go} className="brand"><Mark />FlowForge</Link><small>WORKSPACE</small><nav>{nav.map(([label, to, icon]) => <Link key={to} to={to} go={go} className={path === to || (to === "/projects" && path.startsWith("/projects/")) ? "active" : ""}><i>{icon}</i>{label}</Link>)}</nav><div className="side-bottom"><Link to="/settings" go={go} className={path === "/settings" ? "active" : ""}><i>⚙</i>Settings</Link><div className="person"><Avatar initials="MS" /><span><b>Maya Singh</b><small>Orbit Product</small></span><i>•••</i></div></div></aside><main className="app-main">{children}</main></div>; }
+function PageHead({ eyebrow, title, text, action }) { return <div className="page-head"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{text}</p></div>{action}</div>; }
 
-  const activeUser = useMemo(() => users.find((user) => String(user.id) === activeUserId), [users, activeUserId]);
-  const activeProject = useMemo(() => projects.find((project) => String(project.id) === activeProjectId), [projects, activeProjectId]);
+function Overview({ go, tasks, toggle }) { const open = tasks.filter((t) => !t.done); return <AppShell path="/workspace" go={go}><PageHead eyebrow="Thursday, October 8" title="Good morning, Maya." text="Here is a practical look at what needs your attention." action={<button className="button blue">＋ New project</button>} /><div className="stats"><Stat color="blue" label="Active projects" value="4" note="1 needs attention" /><Stat color="green" label="Tasks completed" value="18" note="+5 this week" /><Stat color="yellow" label="Focus time" value="12h" note="This week" /><Stat color="red" label="Upcoming" value="3" note="Due in 48 hours" /></div><div className="dashboard"><section className="panel focus"><PanelTitle title="Today, in focus" note="Three tasks worth clearing before you switch off." link="View all" go={go} to="/tasks" />{open.slice(0, 3).map((task) => <FocusTask key={task.id} task={task} toggle={toggle} />)}</section><section className="panel momentum"><PanelTitle title="Project momentum" note="Healthy movement across the work that matters." /><div className="big-number">72<small>%</small> <Pill tone="green">↑ 8% this week</Pill></div><div className="bars">{[25, 35, 28, 55, 48, 72, 65].map((h, i) => <i key={i} style={{ height: `${h}%` }}></i>)}</div><div className="bar-labels">Mon Tue Wed Thu Fri Sat Sun</div></section><section className="panel pulse"><PanelTitle title="Project pulse" note="Keep an eye on the work in motion." link="All projects" go={go} to="/projects" />{projects.slice(0, 3).map((project) => <Link key={project.id} to={`/projects/${project.id}`} go={go} className="pulse-row"><i style={{ background: project.color }}></i><span><b>{project.name}</b><small>{project.team}</small></span><em><strong style={{ width: `${project.progress}%`, background: project.color }}></strong><small>{project.progress}%</small></em><u>{project.due}</u></Link>)}</section><section className="panel activity"><PanelTitle title="Team activity" note="Small updates from the people around you." />{activity.slice(0, 3).map((a) => <div className="activity-row" key={a.name}><Avatar initials={a.initials} color={a.color} /><p><b>{a.name}</b> {a.action}<small>{a.when}</small></p></div>)}</section></div></AppShell>; }
+function PanelTitle({ title, note, link, go, to }) { return <header className="panel-title"><div><h2>{title}</h2><p>{note}</p></div>{link && <Link to={to} go={go}>{link}</Link>}</header>; }
+function Stat({ color, label, value, note }) { return <article className={`stat ${color}`}><span>{label}</span><b>{value}</b><small>{note}</small></article>; }
+function FocusTask({ task, toggle }) { return <article className="focus-task"><button onClick={() => toggle(task.id)} className={task.done ? "done" : ""}>{task.done ? "✓" : ""}</button><div><b>{task.title}</b><p>{task.description}</p><span><Pill tone={task.priority === "High" ? "red" : "yellow"}>{task.priority}</Pill><em>{task.due}</em></span></div><Avatar initials={task.initials} color={task.assignee === "Maya" ? "#4285F4" : "#34A853"} /></article>; }
 
-  function showError(error) {
-    setNotice(error.message || "Something went wrong.");
-  }
+function Projects({ path, go }) { const id = path.split("/")[2]; const project = projects.find((p) => p.id === id); if (project) return <ProjectDetail project={project} go={go} />; return <AppShell path={path} go={go}><PageHead eyebrow="Workspace projects" title="Projects with a point of view." text="Every active piece of work, its shape, and where it is headed." action={<button className="button blue">＋ New project</button>} /><div className="tabs"><button className="tab-active">All projects <b>4</b></button><button>In progress</button><button>Planning</button><button>Completed</button></div><div className="project-grid">{projects.map((p) => <Link key={p.id} to={`/projects/${p.id}`} go={go} className="project-card"><div><span className="project-icon" style={{ background: p.color }}>▱</span><Pill>{p.status}</Pill></div><h2>{p.name}</h2><p>{p.description}</p><footer><span><i><b style={{ width: `${p.progress}%`, background: p.color }}></b></i><small>{p.progress}% complete</small></span><em>{p.due}</em></footer><div className="card-team"><small>{p.team}</small><span className="avatar-stack"><Avatar initials="MS" color={p.color} /><Avatar initials="RP" color="#34A853" /></span></div></Link>)}</div></AppShell>; }
+function ProjectDetail({ project, go }) { const related = initialTasks.filter((task) => task.project === project.name); return <AppShell path={`/projects/${project.id}`} go={go}><Link to="/projects" go={go} className="back">← Back to projects</Link><section className="detail-hero" style={{ background: project.color }}><span>▱</span><div><Pill> {project.status} </Pill><h1>{project.name}</h1><p>{project.description}</p></div><button className="button white">＋ Add task</button></section><div className="detail-grid"><section className="panel"><PanelTitle title="Project work" note="What the team is moving this week." />{related.map((task) => <article className="simple-task" key={task.id}><i></i><span><b>{task.title}</b><small>{task.description}</small></span><Pill tone={task.priority === "High" ? "red" : "yellow"}>{task.priority}</Pill></article>)}</section><aside><section className="panel mini-panel"><span>Progress</span><b>{project.progress}%</b><i><strong style={{ width: `${project.progress}%`, background: project.color }}></strong></i><p>Target date <strong>{project.due}</strong></p></section><section className="panel mini-panel"><span>Team</span><div className="member"><Avatar initials="MS" color={project.color} /><p><b>Maya Singh</b><small>Project lead</small></p></div><div className="member"><Avatar initials="RP" color="#34A853" /><p><b>Riya Patel</b><small>Contributor</small></p></div></section></aside></div></AppShell>; }
 
-  useEffect(() => {
-    api.getUsers().then((data) => {
-      setUsers(data);
-      if (data.length) setActiveUserId(String(data[0].id));
-    }).catch(showError);
-  }, []);
+function Tasks({ tasks, setTasks, go }) { const [adding, setAdding] = useState(false); const columns = ["To do", "In progress", "Review", "Done"]; const advance = (id) => setTasks((all) => all.map((t) => t.id === id ? { ...t, status: columns[(columns.indexOf(t.status) + 1) % columns.length] } : t)); const create = (e) => { e.preventDefault(); const form = new FormData(e.currentTarget); if (!form.get("title")) return; setTasks((all) => [{ id: Date.now(), title: form.get("title"), description: form.get("description") || "A clear next step for the team.", project: form.get("project"), priority: form.get("priority"), status: "To do", initials: "MS", assignee: "Maya", due: "This week", done: false }, ...all]); setAdding(false); }; return <AppShell path="/tasks" go={go}><PageHead eyebrow="My tasks" title="Keep the next thing clear." text="Move work forward without losing its context." action={<button className="button blue" onClick={() => setAdding(!adding)}>＋ Add task</button>} />{adding && <form className="add-task" onSubmit={create}><input name="title" placeholder="What needs to happen?" autoFocus /><input name="description" placeholder="Add a helpful detail" /><select name="project">{projects.map((p) => <option key={p.id}>{p.name}</option>)}</select><select name="priority"><option>Medium</option><option>High</option><option>Low</option></select><button className="button blue">Create task</button></form>}<div className="board">{columns.map((col) => <section key={col}><header>{col}<b>{tasks.filter((t) => t.status === col).length}</b></header>{tasks.filter((t) => t.status === col).map((task) => <article className="board-task" key={task.id}><div><Pill tone={task.priority === "High" ? "red" : task.priority === "Low" ? "green" : "yellow"}>{task.priority}</Pill><button onClick={() => advance(task.id)}>{task.status} ↻</button></div><h3>{task.title}</h3><p>{task.description}</p><footer><span>{task.project}</span><Avatar initials={task.initials} /></footer></article>)}</section>)}</div></AppShell>; }
 
-  useEffect(() => {
-    if (!activeUserId) {
-      setProjects([]);
-      return;
-    }
-    api.getProjectsForUser(activeUserId).then((data) => {
-      setProjects(data);
-      setActiveProjectId(data.length ? String(data[0].id) : "");
-    }).catch(showError);
-  }, [activeUserId]);
+function Calendar({ go }) { const days = ["Mon 5", "Tue 6", "Wed 7", "Thu 8", "Fri 9"]; const events = ["Sprint planning", "Design critique", "Launch readiness", "Research review", "Team retro"]; return <AppShell path="/calendar" go={go}><PageHead eyebrow="Team calendar" title="Make room for the work." text="Commitments, moments to collaborate, and time to think." action={<div className="month">‹ <b>October 2026</b> ›</div>} /><section className="panel calendar"><div>{days.map((day, index) => <article key={day}><header>{day}{index === 3 && <b>Today</b>}</header>{index === 0 && <span className="event blue">Sprint planning · 10:00</span>}<span className={`event c${index}`}>{events[index]} · {index % 2 ? "14:00" : "11:30"}</span>{index === 2 && <span className="event green">Interview playback · 16:00</span>}</article>)}</div></section><section className="focus-note"><b>✦</b><p><strong>Protect your focus time</strong>You have 6 hours of clear time this week. Keep it for the work that needs your best thinking.</p><a>See suggestions →</a></section></AppShell>; }
+function Teams({ go }) { return <AppShell path="/teams" go={go}><PageHead eyebrow="People and teams" title="Work feels better together." text="Small groups with shared context and a clear reason to collaborate." action={<button className="button blue">＋ Create team</button>} /><div className="team-grid">{teams.map((team) => <article className="team-card" key={team.id}><header><b style={{ background: team.color }}>{team.short}</b><button>•••</button></header><h2>{team.name}</h2><p>{team.focus}</p><div className="team-avatars">{team.members.map((m, i) => <Avatar key={m} initials={m.slice(0, 2).toUpperCase()} color={["#4285F4", "#EA4335", "#34A853", "#FBBC04"][i]} />)}<span>{team.members.length} people</span></div><footer>Active projects <b>{team.id === "orbit" ? 2 : 1}</b></footer></article>)}</div><section className="panel directory"><PanelTitle title="Member directory" note="The people moving work across FlowForge." />{teams.flatMap((t) => t.members).slice(0, 6).map((m, i) => <article key={m}><Avatar initials={m.slice(0, 2).toUpperCase()} color={["#4285F4", "#EA4335", "#34A853", "#FBBC04"][i % 4]} /><p><b>{m} {i === 0 ? "Singh" : i === 1 ? "Mehta" : "Kim"}</b><small>{teams[i % 3].name}</small></p><span>{i % 2 ? "Active today" : "In a focus block"}</span><button>View</button></article>)}</section></AppShell>; }
 
-  async function loadTasks() {
-    if (!activeProjectId) return;
-    setLoading(true);
-    try {
-      let data;
-      if (statusFilter !== "ALL") {
-        data = await api.getTasksByCompletion(activeProjectId, statusFilter === "COMPLETED");
-      } else if (priorityFilter !== "ALL") {
-        data = await api.getTasksByPriority(activeProjectId, priorityFilter);
-      } else {
-        data = await api.getProjectTasks(activeProjectId);
-      }
-      if (statusFilter !== "ALL" && priorityFilter !== "ALL") {
-        data = data.filter((task) => task.prioriti === priorityFilter);
-      }
-      setTasks(data);
-    } catch (error) {
-      showError(error);
-    } finally {
-      setLoading(false);
-    }
-  }
+function MarketingPage({ type, go }) { const content = { features: ["The FlowForge way", "Give the work a place to move.", "Projects are only useful when they make the next decision easier. FlowForge keeps each team’s plan, tasks, and momentum connected."], templates: ["Start with a shape", "Useful from the first task.", "Simple starting points for the work teams return to again and again."], about: ["About FlowForge", "Built for the actual work.", "FlowForge is a project-management concept shaped around a simple belief: teams do better work when their tools make the work clearer, not louder."] }[type]; return <main className="marketing"><section className="shell marketing-hero"><span className="eyebrow">{content[0]}</span><h1>{content[1]}</h1><p>{content[2]}</p></section>{type === "features" && <FeaturePage go={go} />}{type === "templates" && <TemplatePage go={go} />}{type === "about" && <AboutPage />}</main>; }
+function FeaturePage({ go }) { return <><section className="shell story"><div><span>✦</span><h2>Start with what matters.</h2><p>Keep a readable view of every project, then zoom in when it is time to do the work.</p><Link to="/workspace" go={go} className="text-link">Explore the workspace →</Link></div><div className="mini-board"><i></i><i></i><i></i><i></i><i></i><i></i></div></section><section className="shell use-cases">{[["01", "Product", "Bring decisions, delivery, and release work into one visible path."], ["02", "Creative", "Protect the brief while keeping reviews and production moving."], ["03", "Operations", "Turn recurring work into a dependable, low-friction cadence."]].map((x) => <article key={x[1]}><span>{x[0]}</span><h3>{x[1]}</h3><p>{x[2]}</p>→</article>)}</section></>; }
+function TemplatePage({ go }) { return <section className="shell template-list">{[["Product launch", "A practical path from product brief to release day.", "#4285F4"], ["Marketing campaign", "Keep audience, creative, and distribution aligned.", "#EA4335"], ["Research sprint", "Turn questions, interviews, and insight into an active plan.", "#34A853"], ["Team onboarding", "Give new teammates their first week with less uncertainty.", "#FBBC04"]].map(([title, text, color]) => <article key={title}><div style={{ background: color }}><i></i><i></i><i></i></div><section><small>FLOWFORGE TEMPLATE</small><h2>{title}</h2><p>{text}</p><button className="button dark" onClick={() => go("/workspace")}>Preview template →</button></section></article>)}</section>; }
+function AboutPage() { return <section className="shell about"><div><h2>Calm is a feature.</h2><p>We want planning software to leave more room for planning, not become a job of its own. That means useful defaults, concise information, and a visual system that makes priorities easy to see.</p></div><section>{[["01", "Stay specific", "Every project deserves a reason, an owner, and a next meaningful move."], ["02", "Keep context close", "Good collaboration is less about notifications and more about shared understanding."], ["03", "Respect attention", "Make it easier to focus, finish, and leave work in a better state than you found it."]].map((x) => <article key={x[0]}><span>{x[0]}</span><h3>{x[1]}</h3><p>{x[2]}</p></article>)}</section></section>; }
+function Settings({ go }) { return <AppShell path="/settings" go={go}><PageHead eyebrow="Workspace settings" title="Make it yours." text="Small preferences for the way your team works." /> <section className="panel settings">{[["Workspace name", "FlowForge demo workspace"], ["Weekly start", "Monday"], ["Notifications", "Important project activity only"], ["Theme", "Light"]].map((item) => <article key={item[0]}><p><b>{item[0]}</b><small>{item[1]}</small></p><button>Edit</button></article>)}</section></AppShell>; }
 
-  useEffect(() => { loadTasks(); }, [activeProjectId, statusFilter, priorityFilter]);
-
-  async function createProject(project) {
-    try {
-      await api.createProject(activeUserId, project);
-      const data = await api.getProjectsForUser(activeUserId);
-      setProjects(data);
-      setActiveProjectId(String(data[data.length - 1]?.id || ""));
-      setNotice("Project created.");
-    } catch (error) { showError(error); }
-  }
-
-  async function createTask(task) {
-    try {
-      await api.createTask(activeProjectId, task);
-      await loadTasks();
-      setNotice("Task added.");
-    } catch (error) { showError(error); }
-  }
-
-  async function toggleTask(taskId) {
-    try {
-      await api.toggleTask(taskId);
-      await loadTasks();
-    } catch (error) { showError(error); }
-  }
-
-  async function clearCompleted() {
-    if (!window.confirm("Remove every completed task from this project?")) return;
-    try {
-      await api.clearCompletedTasks(activeProjectId);
-      await loadTasks();
-      setNotice("Completed tasks cleared.");
-    } catch (error) { showError(error); }
-  }
-
-  return (
-    <main className="min-h-screen">
-      <header className="border-b border-slate-800 bg-slate-950 text-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div><p className="text-xl font-black tracking-tight">Flow<span className="text-indigo-400">Forge</span></p><p className="text-sm text-slate-400">A focused workspace for your projects and tasks.</p></div>
-          <label className="flex items-center gap-3 text-sm font-semibold text-slate-300">Active user
-            <select className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white outline-none focus:ring-2 focus:ring-indigo-400" value={activeUserId} onChange={(event) => setActiveUserId(event.target.value)}>
-              {!users.length && <option>No users found</option>}
-              {users.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.email}</option>)}
-            </select>
-          </label>
-        </div>
-      </header>
-
-      <div className="mx-auto grid max-w-7xl gap-6 px-5 py-7 lg:grid-cols-[300px_1fr]">
-        <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4"><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Projects</p><h1 className="mt-1 text-lg font-bold">{activeUser ? `${activeUser.name}'s work` : "Select a user"}</h1></div>
-          <div className="mb-5 space-y-2">
-            {projects.map((project) => <button key={project.id} onClick={() => setActiveProjectId(String(project.id))}
-              className={`w-full rounded-xl p-3 text-left transition ${String(project.id) === activeProjectId ? "bg-indigo-600 text-white shadow-md" : "bg-slate-50 hover:bg-indigo-50"}`}>
-              <p className="font-semibold">{project.name}</p><p className={`mt-1 line-clamp-2 text-xs ${String(project.id) === activeProjectId ? "text-indigo-100" : "text-slate-500"}`}>{project.description || "No description"}</p>
-            </button>)}
-            {activeUserId && !projects.length && <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">No projects yet. Create the first one below.</p>}
-          </div>
-          <ProjectForm onSubmit={createProject} disabled={!activeUserId} />
-        </aside>
-
-        <section className="min-w-0">
-          {notice && <div className="mb-4 flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-800"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss message" className="font-bold">×</button></div>}
-          {!activeProject ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500">Choose or create a project to start managing tasks.</div> : <>
-            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div><p className="text-xs font-bold uppercase tracking-wider text-indigo-600">{activeProject.status || "ONGOING"}</p><h2 className="mt-1 text-3xl font-black tracking-tight">{activeProject.name}</h2><p className="mt-1 text-slate-500">{activeProject.description}</p></div>
-              <button onClick={clearCompleted} className="btn-secondary border-rose-200 text-rose-700 hover:bg-rose-50">Clear completed</button>
-            </div>
-            <TaskForm onSubmit={createTask} />
-            <div className="my-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm font-semibold text-slate-600">Task filters</p>
-              <div className="flex flex-wrap gap-2"><select className="field w-auto" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="COMPLETED">Completed</option></select><select className="field w-auto" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="ALL">All priorities</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select></div>
-            </div>
-            {loading ? <p className="py-10 text-center text-slate-400">Loading tasks…</p> : <div className="grid gap-3">{tasks.map((task) => <TaskCard key={task.id} task={task} onToggle={toggleTask} />)}{!tasks.length && <div className="rounded-xl border border-dashed border-slate-300 bg-white py-10 text-center text-slate-500">No tasks match this view.</div>}</div>}
-          </>}
-        </section>
-      </div>
-    </main>
-  );
-}
+export default function App() { const [path, go] = useRoute(); const [tasks, setTasks] = useState(initialTasks); const toggle = (id) => setTasks((all) => all.map((t) => t.id === id ? { ...t, done: !t.done } : t)); const app = path === "/workspace" || path.startsWith("/projects") || ["/tasks", "/calendar", "/teams", "/settings"].includes(path); let page = path === "/" ? <Home go={go} /> : path === "/workspace" ? <Overview go={go} tasks={tasks} toggle={toggle} /> : path.startsWith("/projects") ? <Projects path={path} go={go} /> : path === "/tasks" ? <Tasks tasks={tasks} setTasks={setTasks} go={go} /> : path === "/calendar" ? <Calendar go={go} /> : path === "/teams" ? <Teams go={go} /> : path === "/settings" ? <Settings go={go} /> : ["/features", "/templates", "/about"].includes(path) ? <MarketingPage type={path.slice(1)} go={go} /> : <Home go={go} />; return <>{!app && <Header path={path} go={go} />}{page}{!app && <Footer go={go} />}</>; }
